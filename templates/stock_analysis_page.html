@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>주식 매수 전략 분석</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        /* 커스텀 스크롤바 */
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px; /* 스크롤바 너비 */
+            height: 8px; /* 가로 스크롤바 높이 */
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #2d3748; /* 트랙 색상 (gray-800) */
+            border-radius: 10px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #4a5568; /* 스크롤바 색상 (gray-700) */
+            border-radius: 10px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; /* 호버 시 색상 (gray-600) */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans p-6">
+    <div class="max-w-7xl mx-auto bg-gray-800 p-8 rounded-lg shadow-xl">
+        <h1 class="text-4xl font-bold text-teal-400 mb-8 text-center">📈 주식 매수 전략 백테스팅 및 AI 보완</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="col-span-1 md:col-span-2">
+                <div class="bg-gray-700 p-6 rounded-lg shadow-md">
+                    <h2 class="text-2xl font-semibold text-gray-100 mb-4">분석 조건 설정</h2>
+                    <form id="analysis-form" class="space-y-4">
+                        <div>
+                            <label for="symbol" class="block text-gray-300 text-sm font-bold mb-2">종목 코드:</label>
+                            <input type="text" id="symbol" name="symbol" value="005930" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-200">
+                        </div>
+                        <div>
+                            <label for="start_date" class="block text-gray-300 text-sm font-bold mb-2">시작일:</label>
+                            <input type="date" id="start_date" name="start_date" value="2020-01-01" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-200">
+                        </div>
+                        <div>
+                            <label for="end_date" class="block text-gray-300 text-sm font-bold mb-2">종료일:</label>
+                            <input type="date" id="end_date" name="end_date" value="2024-01-01" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-200">
+                        </div>
+                        <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline transition duration-200">분석 시작</button>
+                    </form>
+                </div>
+            </div>
+            <div class="col-span-1">
+                <div class="bg-gray-700 p-6 rounded-lg shadow-md h-full flex flex-col justify-between">
+                    <div>
+                        <h2 class="text-2xl font-semibold text-gray-100 mb-4">현재 매수 신호</h2>
+                        <div id="current-signal-status" class="text-center">
+                            <p class="text-lg text-gray-400">분석 중...</p>
+                        </div>
+                    </div>
+                    <div id="current-signal-details" class="mt-4 text-sm text-gray-300">
+                        </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gray-700 p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-2xl font-semibold text-gray-100 mb-4">주가 차트 및 매수 신호</h2>
+            <div id="stock-chart" class="h-96 w-full"></div>
+            <p class="text-gray-400 text-sm mt-2">차트상의 초록색 원은 매수 신호를 의미합니다.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-gray-700 p-6 rounded-lg shadow-md">
+                <h2 class="text-2xl font-semibold text-gray-100 mb-4">백테스팅 결과 요약</h2>
+                <div id="summary-results">
+                    <p class="text-gray-400">데이터 로딩 중...</p>
+                </div>
+            </div>
+            <div class="bg-gray-700 p-6 rounded-lg shadow-md">
+                <h2 class="text-2xl font-semibold text-gray-100 mb-4">수익률 분포 (전체)</h2>
+                <div id="overall-profit-distribution" class="h-72"></div>
+            </div>
+        </div>
+
+        <div class="bg-gray-700 p-6 rounded-lg shadow-md">
+            <h2 class="text-2xl font-semibold text-gray-100 mb-4">상세 백테스팅 거래 내역</h2>
+            <div class="overflow-x-auto custom-scroll">
+                <table class="min-w-full divide-y divide-gray-600">
+                    <thead class="bg-gray-600">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">매수일</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">매수 가격</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">매도일 (5일)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">수익률 (5일)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">매도일 (10일)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">수익률 (10일)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">매도일 (20일)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">수익률 (20일)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">신호 타입</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">AI 점수</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">상세 신호</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trading-results-body" class="bg-gray-700 divide-y divide-gray-600">
+                        <tr><td colspan="11" class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-400">데이터를 로딩 중...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('analysis-form');
+            const currentSignalStatus = document.getElementById('current-signal-status');
+            const currentSignalDetails = document.getElementById('current-signal-details');
+            const summaryResults = document.getElementById('summary-results');
+            const tradingResultsBody = document.getElementById('trading-results-body');
+            let stockChart = null; // Chart instance
+            let profitDistributionChart = null; // Profit distribution chart instance
+
+            // Set default dates
+            const endDateInput = document.getElementById('end_date');
+            const startDateInput = document.getElementById('start_date');
+            const today = new Date();
+            const fourYearsAgo = new Date();
+            fourYearsAgo.setFullYear(today.getFullYear() - 4);
+            endDateInput.value = today.toISOString().slice(0, 10);
+            startDateInput.value = fourYearsAgo.toISOString().slice(0, 10);
+
+            form.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const formData = new FormData(form);
+                const params = new URLSearchParams(formData).toString();
+                const url = `/analyze-strategy/?${params}`;
+
+                currentSignalStatus.innerHTML = '<p class="text-lg text-yellow-400">분석 중...</p>';
+                currentSignalDetails.innerHTML = '';
+                summaryResults.innerHTML = '<p class="text-gray-400">데이터 로딩 중...</p>';
+                tradingResultsBody.innerHTML = '<tr><td colspan="11" class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-400">데이터를 로딩 중...</td></tr>';
+
+                if (stockChart) {
+                    stockChart.destroy();
+                    stockChart = null;
+                }
+                if (profitDistributionChart) {
+                    profitDistributionChart.destroy();
+                    profitDistributionChart = null;
+                }
+
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    if (data.error) {
+                        currentSignalStatus.innerHTML = `<p class="text-lg text-red-500">오류: ${data.error}</p>`;
+                        summaryResults.innerHTML = `<p class="text-red-500">오류: ${data.error}</p>`;
+                        tradingResultsBody.innerHTML = `<tr><td colspan="11" class="px-6 py-4 whitespace-nowrap text-center text-sm text-red-500">${data.error}</td></tr>`;
+                        return;
+                    }
+
+                    renderChart(data.full_df_for_chart, data.past_buy_dates, data.latest_buy_signal_date_for_chart);
+                    updateSummary(data.trading_results, data.current_buy_signal);
+                    populateTradingResults(data.trading_results);
+                    renderProfitDistributionChart(data.overall_profit_distribution);
+
+                } catch (error) {
+                    console.error('Fetch error:', error);
+                    currentSignalStatus.innerHTML = `<p class="text-lg text-red-500">데이터를 가져오는 중 오류 발생.</p>`;
+                    summaryResults.innerHTML = `<p class="text-red-500">데이터를 가져오는 중 오류 발생.</p>`;
+                    tradingResultsBody.innerHTML = `<tr><td colspan="11" class="px-6 py-4 whitespace-nowrap text-center text-sm text-red-500">데이터를 가져오는 중 오류 발생.</td></tr>`;
+                }
+            });
+
+            function renderChart(chartData, buyDates, latestBuySignalDate) {
+                const dates = chartData.map(d => new Date(d.date).getTime());
+                const closePrices = chartData.map(d => d.close_price);
+                const sarValues = chartData.map(d => d.SAR); // SAR 데이터
+
+                // SAR 데이터가 없는 경우를 대비하여 필터링
+                const validSarPoints = chartData.filter(d => d.SAR !== null && d.SAR !== undefined);
+                const sarDates = validSarPoints.map(d => new Date(d.date).getTime());
+                const sarPrices = validSarPoints.map(d => d.SAR);
+
+                const buySignalAnnotations = buyDates.map(dateStr => {
+                    const timestamp = new Date(dateStr).getTime();
+                    const dataPoint = chartData.find(d => new Date(d.date).toISOString().slice(0, 10) === dateStr);
+                    if (dataPoint) {
+                        return {
+                            x: timestamp,
+                            y: dataPoint.close_price, // 매수 신호가 발생한 날의 종가에 표시
+                            marker: {
+                                size: 8,
+                                fillColor: '#34D399', // green-400
+                                strokeColor: '#10B981', // green-500
+                                radius: 2,
+                                cssClass: 'apexcharts-custom-point'
+                            },
+                            label: {
+                                borderColor: '#34D399',
+                                offsetY: 0,
+                                style: {
+                                    color: '#fff',
+                                    background: '#34D399',
+                                },
+                                text: 'BUY'
+                            }
+                        };
+                    }
+                    return null;
+                }).filter(Boolean); // null 값 필터링
+
+                const chartOptions = {
+                    series: [{
+                        name: '종가',
+                        data: closePrices.map((price, index) => [dates[index], price]),
+                        type: 'line' // 주가 라인 차트
+                    },
+                    {
+                        name: 'SAR',
+                        data: sarPrices.map((price, index) => [sarDates[index], price]),
+                        type: 'line', // SAR 라인 차트
+                        colors: ['#FBBF24'] // SAR 색상 (amber-400)
+                    }],
+                    chart: {
+                        type: 'line', // 기본 차트 타입도 라인으로 설정
+                        height: 380,
+                        foreColor: '#E2E8F0', // text-gray-200
+                        background: '#4A5568', // gray-700
+                        toolbar: {
+                            show: true
+                        }
+                    },
+                    xaxis: {
+                        type: 'datetime',
+                        labels: {
+                            datetimeFormatter: {
+                                year: 'yyyy',
+                                month: 'yy/MM',
+                                day: 'MM/dd'
+                            },
+                            style: {
+                                colors: '#CBD5E0', // text-gray-300
+                            }
+                        },
+                        tickAmount: 10,
+                    },
+                    yaxis: {
+                        labels: {
+                            formatter: function (value) {
+                                return value.toLocaleString('ko-KR');
+                            },
+                            style: {
+                                colors: '#CBD5E0', // text-gray-300
+                            }
+                        },
+                        tooltip: {
+                            enabled: true
+                        }
+                    },
+                    grid: {
+                        borderColor: '#475569', // gray-600
+                        strokeDashArray: 2
+                    },
+                    tooltip: {
+                        x: {
+                            format: 'yyyy년 MM월 dd일'
+                        },
+                        y: {
+                            formatter: function (value) {
+                                return value ? value.toLocaleString('ko-KR') : '-';
+                            }
+                        },
+                        theme: 'dark'
+                    },
+                    stroke: {
+                        width: [2, 1], // 종가 라인 두께 2, SAR 라인 두께 1
+                        curve: 'smooth'
+                    },
+                    markers: {
+                        size: 0, // 기본 마커는 숨김
+                    },
+                    annotations: {
+                        points: buySignalAnnotations // 매수 신호 어노테이션 추가
+                    },
+                    noData: {
+                        text: '데이터가 없습니다.',
+                        align: 'center',
+                        verticalAlign: 'middle',
+                        offsetX: 0,
+                        offsetY: 0,
+                        style: {
+                            color: '#CBD5E0',
+                            fontSize: '16px',
+                        }
+                    },
+                    colors: ['#6EE7B7', '#FBBF24'], // 종가(green-300), SAR(amber-400)
+                    dataLabels: {
+                        enabled: false
+                    }
+                };
+
+                const chartElement = document.getElementById('stock-chart');
+                if (stockChart) {
+                    stockChart.destroy();
+                }
+                stockChart = new ApexCharts(chartElement, chartOptions);
+                stockChart.render();
+            }
+            // ... (나머지 renderProfitDistributionChart, updateSummary, populateTradingResults 함수들)
+            // ... (초기 로드를 위한 form.submit() 호출)
+        });
+    </script>
+</body>
+</html>
